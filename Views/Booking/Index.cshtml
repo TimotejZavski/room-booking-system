@@ -1,0 +1,902 @@
+@model WebApplication1.ViewModels.BookingIndexViewModel
+@{
+    ViewData["Title"] = "Rezervacija Kabineta";
+    Layout = null; // Removing the layout to eliminate navigation and footer
+}
+
+<!DOCTYPE html>
+<html lang="sl">
+<head>
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title>@ViewData["Title"]</title>
+    <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css"/>
+    <link rel="stylesheet" href="~/css/site.css" asp-append-version="true"/>
+    <link rel="stylesheet" href="~/WebApplication1.styles.css" asp-append-version="true"/>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            height: 100vh;
+            background-color: #f8f9fa;
+        }
+        .tablet-display {
+            display: flex;
+            height: 100vh;
+            width: 100vw;
+        }
+        .booking-section {
+            width: 70%;
+            height: 100%;
+            padding: 20px;
+            color: white;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            position: relative;
+        }
+        .booking-section-available {
+            background-color: #77c991; /* Green for available */
+        }
+        .booking-section-reserved {
+            background-color: #f0ad4e; /* Yellow for reserved but not checked in */
+        }
+        .booking-section-checked-in {
+            background-color: #d9534f; /* Red for checked in */
+        }
+        .schedule-section {
+            width: 30%;
+            height: 100%;
+            overflow-y: auto;
+            padding: 20px;
+            background-color: #f8f9fa;
+        }
+        .time-display {
+            position: absolute;
+            top: 30px;
+            left: 30px;
+            font-size: 24px;
+        }
+        .status-display {
+            font-size: 48px;
+            font-weight: bold;
+            margin-bottom: 20px;
+        }
+        .action-button {
+            width: 200px;
+            height: 200px;
+            border-radius: 50%;
+            background-color: #2c7242;
+            color: white;
+            font-size: 72px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin-bottom: 30px;
+            border: none;
+            cursor: pointer;
+        }
+        .book-now-text {
+            font-size: 24px;
+            font-weight: bold;
+        }
+        .schedule-header {
+            background-color: #f0f0f0;
+            padding: 10px;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+        .schedule-item {
+            border-left: 4px solid #007bff;
+            padding: 10px;
+            margin-bottom: 10px;
+            background-color: white;
+        }
+        .today-label, .tomorrow-label {
+            font-size: 14px;
+            color: #666;
+            margin-bottom: 5px;
+        }
+        .arrow-icon {
+            margin: 0 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="tablet-display">
+        <!-- Left Section (70%) - Booking Area -->
+        <div class="booking-section @GetBookingSectionClass(Model.CurrentBooking)">
+            <div class="time-display" id="current-time"></div>
+            
+    @if (TempData["ErrorMessage"] != null)
+    {
+        <div class="alert alert-danger alert-dismissible fade show" role="alert">
+            @TempData["ErrorMessage"]
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+    }
+
+                    @if (Model.CurrentBooking != null)
+                    {
+                @if (Model.CurrentBooking.Status == WebApplication1.Models.BookingStatus.Reserved)
+                {
+                    <div class="status-display text-center">ČAKAJOČA REZERVACIJA</div>
+                }
+                else
+                {
+                    <div class="status-display text-center">ZASEDENO</div>
+                }
+                <div class="p-3 bg-light rounded text-dark">
+                    <h3>Trenutna rezervacija:</h3>
+                    <p class="lead">Dijak: <strong>@Model.CurrentBooking.StudentName</strong></p>
+                    @if (!string.IsNullOrEmpty(Model.CurrentBooking.Reason))
+                    {
+                        <p>Razlog: <strong>@Model.CurrentBooking.Reason</strong></p>
+                    }
+                    <p>Čas: @Model.CurrentBooking.StartTime.ToString("h:mm tt") - @Model.CurrentBooking.EndTime.ToString("h:mm tt")</p>
+                </div>
+            }
+            else
+            {
+                <div class="status-display">PROSTO</div>
+                <button class="action-button" data-bs-toggle="modal" data-bs-target="#bookingModal">+</button>
+                <div class="book-now-text">Rezerviraj zdaj!</div>
+            }
+        </div>
+
+        <!-- Right Section (30%) - Schedule List -->
+        <div class="schedule-section">
+            <div class="schedule-header">DANES</div>
+            
+            @if (Model.TodayBookings != null && Model.TodayBookings.Any())
+            {
+                @foreach (var booking in Model.TodayBookings)
+                {
+                    <div class="schedule-item" 
+                         data-booking-id="@booking.Id" 
+                         data-start-iso="@booking.StartTime.ToString("o")" 
+                         data-end-iso="@booking.EndTime.ToString("o")" 
+                         style="cursor: pointer;">
+                        <div class="today-label">DANES</div>
+                        <div class="fw-bold">@booking.StartTime.ToString("HH:mm") <span class="arrow-icon">→</span> @booking.EndTime.ToString("HH:mm")</div>
+                        <div>@booking.StudentName</div>
+                        <div class="booking-status">
+                            @if (booking.Status == WebApplication1.Models.BookingStatus.Reserved)
+                            {
+                                <span class="badge bg-warning">Čakajoča</span>
+                            }
+                            else if (booking.Status == WebApplication1.Models.BookingStatus.CheckedIn)
+                            {
+                                <span class="badge bg-danger">Aktivna</span>
+                            }
+                            else if (booking.Status == WebApplication1.Models.BookingStatus.CheckedOut)
+                            {
+                                <span class="badge bg-info">Zaključena</span>
+                            }
+                        </div>
+                    </div>
+                }
+            }
+            else
+            {
+                <div class="schedule-item">
+                    <div>Ni rezervacij.</div>
+                </div>
+            }
+            
+            <div class="schedule-header mt-4">JUTRI, @DateTime.Now.AddDays(1).ToString("dddd, d. MMMM", new System.Globalization.CultureInfo("sl-SI"))</div>
+
+            @if (Model.TomorrowBookings != null && Model.TomorrowBookings.Any())
+            {
+                @foreach (var booking in Model.TomorrowBookings)
+                {
+                    <div class="schedule-item" 
+                         data-booking-id="@booking.Id" 
+                         data-start-iso="@booking.StartTime.ToString("o")" 
+                         data-end-iso="@booking.EndTime.ToString("o")" 
+                         style="cursor: pointer;">
+                        <div class="tomorrow-label">JUTRI</div>
+                        <div class="fw-bold">@booking.StartTime.ToString("HH:mm") <span class="arrow-icon">→</span> @booking.EndTime.ToString("HH:mm")</div>
+                        <div>@booking.StudentName</div>
+                        <div class="booking-status">
+                            @if (booking.Status == WebApplication1.Models.BookingStatus.Reserved)
+                            {
+                                <span class="badge bg-warning">Čakajoča</span>
+                            }
+                            else if (booking.Status == WebApplication1.Models.BookingStatus.CheckedIn)
+                            {
+                                <span class="badge bg-danger">Aktivna</span>
+                            }
+                            else if (booking.Status == WebApplication1.Models.BookingStatus.CheckedOut)
+                            {
+                                <span class="badge bg-info">Zaključena</span>
+                            }
+                        </div>
+                    </div>
+                }
+            }
+            else
+            {
+                <div class="schedule-item">
+                    <div>Jutri ni rezervacij</div>
+                </div>
+            }
+        </div>
+    </div>
+
+    <!-- Booking Modal -->
+    <div class="modal fade" id="bookingModal" tabindex="-1" aria-labelledby="bookingModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <form asp-action="CreateBooking" asp-controller="Booking" method="post">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="bookingModalLabel">Rezerviraj Kabinet</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="mb-3">
+                            <label for="studentName" class="form-label">Ime dijaka</label>
+                            <input type="text" id="studentName" name="studentName" class="form-control" required />
+                        </div>
+                        <div class="mb-3">
+                            <label for="reason" class="form-label">Razlog</label>
+                            <input type="text" id="reason" name="reason" class="form-control" required />
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Datum</label>
+                            <input type="date" id="bookingDate" name="bookingDate" class="form-control" 
+                                   value="@DateTime.Now.ToString("yyyy-MM-dd")" required />
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Izberi učne ure</label>
+                            <div class="d-flex flex-wrap period-selector">
+                                <div class="form-check period-check me-3 mb-2">
+                                    <input class="form-check-input period-checkbox" type="checkbox" value="1" id="period1" data-start="07:10" data-end="07:55">
+                                    <label class="form-check-label" for="period1">1. ura (7:10-7:55)</label>
+                                </div>
+                                <div class="form-check period-check me-3 mb-2">
+                                    <input class="form-check-input period-checkbox" type="checkbox" value="2" id="period2" data-start="08:00" data-end="08:45">
+                                    <label class="form-check-label" for="period2">2. ura (8:00-8:45)</label>
+                                </div>
+                                <div class="form-check period-check me-3 mb-2">
+                                    <input class="form-check-input period-checkbox" type="checkbox" value="3" id="period3" data-start="08:50" data-end="09:35">
+                                    <label class="form-check-label" for="period3">3. ura (8:50-9:35)</label>
+                                </div>
+                                <div class="form-check period-check me-3 mb-2">
+                                    <input class="form-check-input period-checkbox" type="checkbox" value="4" id="period4" data-start="09:40" data-end="10:25">
+                                    <label class="form-check-label" for="period4">4. ura (9:40-10:25)</label>
+                                </div>
+                                <div class="form-check period-check me-3 mb-2">
+                                    <input class="form-check-input period-checkbox" type="checkbox" value="5" id="period5" data-start="10:30" data-end="11:15">
+                                    <label class="form-check-label" for="period5">5. ura (10:30-11:15)</label>
+                                </div>
+                                <div class="form-check period-check me-3 mb-2">
+                                    <input class="form-check-input period-checkbox" type="checkbox" value="6" id="period6" data-start="11:20" data-end="12:05">
+                                    <label class="form-check-label" for="period6">6. ura (11:20-12:05)</label>
+                                </div>
+                                <div class="form-check period-check me-3 mb-2">
+                                    <input class="form-check-input period-checkbox" type="checkbox" value="7" id="period7" data-start="12:10" data-end="12:55">
+                                    <label class="form-check-label" for="period7">7. ura (12:10-12:55)</label>
+                                </div>
+                                <div class="form-check period-check me-3 mb-2">
+                                    <input class="form-check-input period-checkbox" type="checkbox" value="8" id="period8" data-start="13:00" data-end="13:45">
+                                    <label class="form-check-label" for="period8">8. ura (13:00-13:45)</label>
+                                </div>
+                                <div class="form-check period-check me-3 mb-2">
+                                    <input class="form-check-input period-checkbox" type="checkbox" value="9" id="period9" data-start="13:50" data-end="14:35">
+                                    <label class="form-check-label" for="period9">9. ura (13:50-14:35)</label>
+                                </div>
+                            </div>
+                            <div id="periodSelectionError" class="text-danger mt-2" style="display: none;">
+                                Izberite zaporedne učne ure (npr. 1,2,3 ali 5,6 ali 8,9).
+                            </div>
+                            <!-- Hidden fields to store the calculated times -->
+                            <input type="hidden" id="startTime" name="startTime" required />
+                            <input type="hidden" id="endTime" name="endTime" required />
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Zapri</button>
+                        <button type="submit" id="reserveButton" class="btn btn-primary">Rezerviraj zdaj</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Booking Actions Modal -->
+    <div class="modal fade" id="bookingActionsModal" tabindex="-1" aria-labelledby="bookingActionsModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="bookingActionsModalLabel">Upravljanje rezervacije</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div id="bookingInfoContainer">
+                        <h3 id="bookingModalStudentName"></h3>
+                        <p id="bookingModalTime"></p>
+                        <p id="bookingModalStatus"></p>
+                    </div>
+                    <div id="bookingActionsContainer" class="mt-3">
+                        <!-- Action buttons will be injected here -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="~/lib/jquery/dist/jquery.min.js"></script>
+    <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="~/lib/microsoft/signalr/dist/browser/signalr.min.js"></script>
+    <script>
+        // Update current time
+        function updateCurrentTime() {
+            const now = new Date();
+            const options = { weekday: 'long', day: 'numeric', month: 'long' };
+            const timeString = now.toLocaleString('sl-SI', { hour: '2-digit', minute: '2-digit', hour12: false });
+            document.getElementById('current-time').textContent = timeString + ' ' + now.toLocaleDateString('sl-SI', options);
+            
+            // Check if we need to refresh the page based on current time
+            checkTimeBasedRefresh();
+        }
+        
+        // Regularly check if we need to refresh based on upcoming bookings
+        function checkTimeBasedRefresh() {
+            const currentTime = new Date();
+            
+            // If there's a stored upcoming booking time, check if we've reached it
+            const upcomingBookingTimeStr = sessionStorage.getItem('upcomingBookingTime');
+            if (upcomingBookingTimeStr) {
+                const upcomingBookingTime = new Date(upcomingBookingTimeStr);
+                
+                // If we've reached or passed the booking time, trigger a refresh
+                if (currentTime >= upcomingBookingTime) {
+                    console.log("Booking time reached, refreshing page");
+                    sessionStorage.removeItem('upcomingBookingTime');
+                    // Instead of immediate reload, refresh after a short delay and only if needed
+                    setTimeout(function() {
+                        // Only reload if the page hasn't been recently refreshed
+                        if (!window.recentlyRefreshed) {
+                            window.location.reload();
+                        }
+                    }, 2000);
+                }
+            }
+        }
+        
+        // Update time every second
+        updateCurrentTime();
+        setInterval(updateCurrentTime, 1000);
+        
+        // SignalR connection setup
+        const connection = new signalR.HubConnectionBuilder()
+            .withUrl("/bookingHub")
+            .withAutomaticReconnect()
+            .build();
+            
+        // Start the connection
+        connection.start().then(function() {
+            console.log("SignalR connected");
+            // After connection, check for upcoming bookings without page refresh
+            checkForUpcomingBookings();
+        }).catch(function(err) {
+            console.error("SignalR connection error: " + err.toString());
+        });
+        
+        // Handle booking status updates without page refresh
+        connection.on("RefreshBookingStatus", function(data) {
+            console.log("Booking status changed, updating UI...");
+            
+            // If data is provided, update the UI accordingly
+            if (data) {
+                updateUIWithoutRefresh(data);
+            } else {
+                // If no data provided, just check for upcoming bookings
+                checkForUpcomingBookings();
+            }
+        });
+        
+        // Handle booking action required notifications
+        connection.on("BookingRequiresAction", function(booking) {
+            console.log("Booking requires action", booking);
+            
+            // Only update the background color if this is a current booking
+            updateBackgroundColor(booking);
+        });
+        
+        // Handle booking started events - without page refresh
+        connection.on("BookingStarted", function(booking) {
+            console.log("Booking has started!", booking);
+            
+            // Play a sound notification
+            playNotificationSound();
+            
+            // Update the UI with the new booking information
+            updateUIWithBookingStarted(booking);
+        });
+        
+        // Handle upcoming booking alerts
+        connection.on("UpcomingBookingAlert", function(booking) {
+            console.log("Upcoming booking alert", booking);
+            
+            // Store the upcoming booking time for time-based checking
+            if (booking.timeRemaining) {
+                const bookingTime = new Date();
+                bookingTime.setSeconds(bookingTime.getSeconds() + booking.timeRemaining);
+                sessionStorage.setItem('upcomingBookingTime', bookingTime.toString());
+                console.log("Stored upcoming booking time:", bookingTime);
+            }
+            
+            // No longer showing notifications for upcoming bookings
+            // Just play a sound notification
+            playNotificationSound();
+        });
+        
+        // Function to update the UI with booking data without page refresh
+        function updateUIWithoutRefresh(data) {
+            // Update the background color based on booking status
+            if (data.hasCurrentBooking) {
+                // Remove available class and add the appropriate class based on status
+                $('.booking-section').removeClass('booking-section-available');
+                
+                if (data.currentBookingStatus === 0) { // Reserved (0)
+                    $('.booking-section').removeClass('booking-section-checked-in').addClass('booking-section-reserved');
+                } else if (data.currentBookingStatus === 1) { // CheckedIn (1)
+                    $('.booking-section').removeClass('booking-section-reserved').addClass('booking-section-checked-in');
+                }
+                
+                // Update the current booking display without buttons
+                updateCurrentBookingDisplay(data.currentBooking);
+            } else {
+                // If no current booking, show available
+                $('.booking-section').removeClass('booking-section-reserved booking-section-checked-in').addClass('booking-section-available');
+                
+                // Show the available display
+                showAvailableDisplay();
+            }
+            
+            // Update the schedule lists if provided - including active bookings
+            if (data.todayBookings) {
+                updateTodayBookings(data.todayBookings);
+            }
+            
+            if (data.tomorrowBookings) {
+                updateTomorrowBookings(data.tomorrowBookings);
+            }
+        }
+        
+        // Function to update the UI when a booking has started
+        function updateUIWithBookingStarted(booking) {
+            // Change background to yellow (reserved)
+            $('.booking-section').removeClass('booking-section-available booking-section-checked-in').addClass('booking-section-reserved');
+            
+            // Update the display to show current booking
+            const reasonHtml = booking.reason ? `<p>Razlog: <strong>${booking.reason}</strong></p>` : '';
+            const currentBookingHtml = `
+                <div class="status-display text-center">ČAKAJOČA REZERVACIJA</div>
+                <div class="p-3 bg-light rounded text-dark">
+                    <h3>Trenutna rezervacija:</h3>
+                    <p class="lead">Dijak: <strong>${booking.studentName}</strong></p>
+                    ${reasonHtml}
+                    <p>Čas: ${booking.startTime} - ${booking.endTime}</p>
+                </div>
+            `;
+            
+            // Replace the content in the booking section
+            $('.booking-section > .status-display, .booking-section > .action-button, .booking-section > .book-now-text, .booking-section > .p-3.bg-light').remove();
+            $('.booking-section > .time-display').after(currentBookingHtml);
+            
+            // Refresh today's bookings to include this one
+            checkForUpcomingBookings();
+        }
+        
+        // Function to update the current booking display
+        function updateCurrentBookingDisplay(booking) {
+            const reasonHtml = booking.reason ? `<p>Razlog: <strong>${booking.reason}</strong></p>` : '';
+            const currentBookingHtml = `
+                <div class="status-display text-center">${booking.status === 0 ? 'ČAKAJOČA REZERVACIJA' : 'ZASEDENO'}</div>
+                <div class="p-3 bg-light rounded text-dark">
+                    <h3>Trenutna rezervacija:</h3>
+                    <p class="lead">Dijak: <strong>${booking.studentName}</strong></p>
+                    ${reasonHtml}
+                    <p>Čas: ${booking.startTime} - ${booking.endTime}</p>
+                </div>
+            `;
+            
+            // Replace the content in the booking section
+            $('.booking-section > .status-display, .booking-section > .action-button, .booking-section > .book-now-text, .booking-section > .p-3.bg-light').remove();
+            $('.booking-section > .time-display').after(currentBookingHtml);
+        }
+        
+        // Function to show the available display
+        function showAvailableDisplay() {
+            const availableHtml = `
+                <div class="status-display">PROSTO</div>
+                <button class="action-button" data-bs-toggle="modal" data-bs-target="#bookingModal">+</button>
+                <div class="book-now-text">Rezerviraj zdaj!</div>
+            `;
+            
+            // Replace the content in the booking section
+            $('.booking-section > .status-display, .booking-section > .action-button, .booking-section > .book-now-text, .booking-section > .p-3.bg-light').remove();
+            $('.booking-section > .time-display').after(availableHtml);
+            
+            // Re-attach the modal event handler
+            $('.action-button').on('click', function() {
+                $('#bookingModal').modal('show');
+            });
+        }
+        
+        // Function to update today's bookings list
+        function updateTodayBookings(bookings) {
+            const todayContainer = $('.schedule-section').find('.schedule-header:contains("DANES")').nextUntil('.schedule-header'); // Select elements until next header
+            todayContainer.remove(); // Remove existing items before appending new ones
+            const todayHeader = $('.schedule-section').find('.schedule-header:contains("DANES")');
+            
+            let todayHtml = '';
+            if (bookings && bookings.length > 0) {
+                bookings.forEach(booking => {
+                    let statusBadge = '';
+                    if (booking.status === 0) {
+                        statusBadge = '<span class="badge bg-warning">Čakajoča</span>';
+                    } else if (booking.status === 1) {
+                        statusBadge = '<span class="badge bg-danger">Aktivna</span>';
+                    } else if (booking.status === 2) {
+                        statusBadge = '<span class="badge bg-info">Zaključena</span>';
+                    }
+                    
+                    // Ensure we have full ISO date strings from the server
+                    // The server should send dates in ISO 8601 format (e.g., 2024-01-15T10:00:00Z)
+                    const startIso = booking.startTimeIso || new Date(booking.startTime).toISOString(); 
+                    const endIso = booking.endTimeIso || new Date(booking.endTime).toISOString();
+                    const startTimeDisplay = new Date(startIso).toLocaleTimeString('sl-SI', { hour: '2-digit', minute: '2-digit' });
+                    const endTimeDisplay = new Date(endIso).toLocaleTimeString('sl-SI', { hour: '2-digit', minute: '2-digit' });
+                    
+                    todayHtml += `
+                        <div class="schedule-item" 
+                             data-booking-id="${booking.id}" 
+                             data-start-iso="${startIso}" 
+                             data-end-iso="${endIso}" 
+                             style="cursor: pointer;">
+                            <div class="today-label">DANES</div>
+                            <div class="fw-bold">${startTimeDisplay} <span class="arrow-icon">→</span> ${endTimeDisplay}</div>
+                            <div>${booking.studentName}</div>
+                            <div class="booking-status">
+                                ${statusBadge}
+                            </div>
+                        </div>
+                    `;
+                });
+            } else {
+                todayHtml = `
+                    <div class="schedule-item">
+                        <div>Ni rezervacij.</div>
+                    </div>
+                `;
+            }
+            
+            todayHeader.after(todayHtml); // Insert new items after the header
+            
+            // Re-attach click handlers after updating the content
+            attachBookingClickHandlers();
+        }
+        
+        // Function to update tomorrow's bookings list
+        function updateTomorrowBookings(bookings) {
+            const tomorrowContainer = $('.schedule-section').find('.schedule-header:contains("JUTRI")').nextAll(); // Select all elements after the header
+            tomorrowContainer.remove(); // Remove existing items before appending new ones
+            const tomorrowHeader = $('.schedule-section').find('.schedule-header:contains("JUTRI")');
+            
+            let tomorrowHtml = '';
+            if (bookings && bookings.length > 0) {
+                bookings.forEach(booking => {
+                    let statusBadge = '';
+                    if (booking.status === 0) {
+                        statusBadge = '<span class="badge bg-warning">Čakajoča</span>';
+                    } else if (booking.status === 1) {
+                        statusBadge = '<span class="badge bg-danger">Aktivna</span>';
+                    } else if (booking.status === 2) {
+                        statusBadge = '<span class="badge bg-info">Zaključena</span>';
+                    }
+                    
+                    // Ensure we have full ISO date strings from the server
+                    const startIso = booking.startTimeIso || new Date(booking.startTime).toISOString();
+                    const endIso = booking.endTimeIso || new Date(booking.endTime).toISOString();
+                    const startTimeDisplay = new Date(startIso).toLocaleTimeString('sl-SI', { hour: '2-digit', minute: '2-digit' });
+                    const endTimeDisplay = new Date(endIso).toLocaleTimeString('sl-SI', { hour: '2-digit', minute: '2-digit' });
+                    
+                    tomorrowHtml += `
+                        <div class="schedule-item" 
+                             data-booking-id="${booking.id}" 
+                             data-start-iso="${startIso}" 
+                             data-end-iso="${endIso}" 
+                             style="cursor: pointer;">
+                            <div class="tomorrow-label">JUTRI</div>
+                            <div class="fw-bold">${startTimeDisplay} <span class="arrow-icon">→</span> ${endTimeDisplay}</div>
+                            <div>${booking.studentName}</div>
+                            <div class="booking-status">
+                                ${statusBadge}
+                            </div>
+                        </div>
+                    `;
+                });
+            } else {
+                tomorrowHtml = `
+                    <div class="schedule-item">
+                        <div>Jutri ni rezervacij</div>
+                    </div>
+                `;
+            }
+            
+            tomorrowHeader.after(tomorrowHtml); // Insert new items after the header
+            
+            // Re-attach click handlers after updating the content
+            attachBookingClickHandlers();
+        }
+        
+        // Function to attach click handlers to booking items
+        function attachBookingClickHandlers() {
+            $('.schedule-item[data-booking-id]').off('click').on('click', function() {
+                const bookingId = $(this).data('booking-id');
+                openBookingActionsModal(bookingId);
+            });
+        }
+        
+        // Function to open the booking actions modal
+        function openBookingActionsModal(bookingId) {
+            // Find the booking data from today or tomorrow list
+            const allBookings = [];
+            
+            // Get bookings from server-side rendered data initially
+            $('.schedule-item[data-booking-id]').each(function() {
+                const $item = $(this);
+                const id = $item.data('booking-id');
+                
+                if (id && id.toString() === bookingId.toString()) {
+                    const studentName = $item.find('div:nth-child(3)').text();
+                    const timeText = $item.find('.fw-bold').text(); // For display only
+                    const startIso = $item.data('start-iso');
+                    const endIso = $item.data('end-iso');
+                    
+                    const hasWarningBadge = $item.find('.badge.bg-warning').length > 0;
+                    const hasDangerBadge = $item.find('.badge.bg-danger').length > 0;
+                    const hasInfoBadge = $item.find('.badge.bg-info').length > 0;
+                    
+                    let status = 'Neznano';
+                    let statusClass = '';
+                    let bookingStatus = -1;
+                    
+                    if (hasWarningBadge) {
+                        status = 'Čakajoča rezervacija';
+                        statusClass = 'text-warning';
+                        bookingStatus = 0; // Reserved
+                    } else if (hasDangerBadge) {
+                        status = 'Aktivna rezervacija';
+                        statusClass = 'text-danger';
+                        bookingStatus = 1; // CheckedIn
+                    } else if (hasInfoBadge) {
+                        status = 'Zaključena rezervacija';
+                        statusClass = 'text-info';
+                        bookingStatus = 2; // CheckedOut
+                    }
+                    
+                    // Update modal content
+                    $('#bookingModalStudentName').text(studentName);
+                    $('#bookingModalTime').text(timeText);
+                    $('#bookingModalStatus').text(status).removeClass().addClass(statusClass);
+                    
+                    // Clear and update action buttons
+                    $('#bookingActionsContainer').empty();
+                    
+                    // Use full ISO date strings for accurate time checks
+                    const now = new Date();
+                    const startTime = new Date(startIso);
+                    const endTime = new Date(endIso);
+                    
+                    // Check if this booking is in the future
+                    const isUpcoming = startTime > now;
+                    
+                    // Check if booking is currently active (start time has passed, but end time hasn't)
+                    const isActive = startTime <= now && endTime > now;
+                    
+                    if (bookingStatus === 0) { // Reserved
+                        if (isActive) {
+                            // Current active booking, show check-in and cancel
+                            $('#bookingActionsContainer').html(`
+                                <form action="/Booking/CheckIn" method="post">
+                                    <input type="hidden" name="id" value="${id}" />
+                                    @Html.AntiForgeryToken()
+                                    <button type="submit" class="btn btn-success btn-lg w-100 mb-2">Prijava</button>
+                                </form>
+                                <form action="/Booking/Cancel" method="post">
+                                    <input type="hidden" name="id" value="${id}" />
+                                    @Html.AntiForgeryToken()
+                                    <button type="submit" class="btn btn-danger btn-lg w-100">Prekliči</button>
+                                </form>
+                            `);
+                        } else {
+                            // Future booking or expired, only show cancel option
+                            let message = isUpcoming ? "Ta rezervacija se še ni začela." : "Ta rezervacija je potekla.";
+                            $('#bookingActionsContainer').html(`
+                                <p class="mb-3">${message}</p>
+                                <form action="/Booking/Cancel" method="post">
+                                    <input type="hidden" name="id" value="${id}" />
+                                    @Html.AntiForgeryToken()
+                                    <button type="submit" class="btn btn-danger btn-lg w-100">Prekliči</button>
+                                </form>
+                            `);
+                        }
+                    } else if (bookingStatus === 1) { // CheckedIn
+                        // Only show Odjava button when booking is happening, not Preklici
+                        if (isActive) {
+                            $('#bookingActionsContainer').html(`
+                                <form action="/Booking/CheckOut" method="post">
+                                    <input type="hidden" name="id" value="${id}" />
+                                    @Html.AntiForgeryToken()
+                                    <button type="submit" class="btn btn-warning btn-lg w-100 mb-2">Odjava</button>
+                                </form>
+                            `);
+                        } else {
+                            $('#bookingActionsContainer').html(`
+                                <form action="/Booking/CheckOut" method="post">
+                                    <input type="hidden" name="id" value="${id}" />
+                                    @Html.AntiForgeryToken()
+                                    <button type="submit" class="btn btn-warning btn-lg w-100 mb-2">Odjava</button>
+                                </form>
+                                <form action="/Booking/Cancel" method="post">
+                                    <input type="hidden" name="id" value="${id}" />
+                                    @Html.AntiForgeryToken()
+                                    <button type="submit" class="btn btn-danger btn-lg w-100">Prekliči</button>
+                                </form>
+                            `);
+                        }
+                    }
+                    
+                    // Show the modal
+                    $('#bookingActionsModal').modal('show');
+                }
+            });
+        }
+        
+        // Function to update the background color based on booking status
+        function updateBackgroundColor(booking) {
+            if (!booking) {
+                $('.booking-section').removeClass('booking-section-reserved booking-section-checked-in').addClass('booking-section-available');
+            } else {
+                if (booking.status === 0) { // Reserved
+                    $('.booking-section').removeClass('booking-section-available booking-section-checked-in').addClass('booking-section-reserved');
+                } else if (booking.status === 1) { // CheckedIn
+                    $('.booking-section').removeClass('booking-section-available booking-section-reserved').addClass('booking-section-checked-in');
+                } else {
+                    $('.booking-section').removeClass('booking-section-reserved booking-section-checked-in').addClass('booking-section-available');
+                }
+            }
+        }
+        
+        // Optional: Play notification sound
+        function playNotificationSound() {
+            // Create and play a notification sound
+            const audio = new Audio();
+            audio.src = '/sounds/notification.mp3'; // You would need to add this file
+            audio.play().catch(function(error) {
+                console.log("Audio playback error: " + error.message);
+            });
+        }
+        
+        // Check for upcoming bookings
+        function checkForUpcomingBookings() {
+            $.ajax({
+                url: '@Url.Action("CheckUpcomingBookings", "Booking")',
+                type: 'GET',
+                error: function() {
+                    console.log("Error checking for upcoming bookings");
+                }
+            });
+        }
+        
+        // Period selection validation functions
+        function validatePeriodSelection() {
+            var $checkedPeriods = $('.period-checkbox:checked');
+            
+            // If no periods selected, show error
+            if ($checkedPeriods.length === 0) {
+                $('#periodSelectionError').text('Izberite vsaj eno učno uro.').show();
+                return false;
+            }
+            
+            // Check if selected periods are consecutive
+            var periodNumbers = $checkedPeriods.map(function() {
+                return parseInt($(this).val());
+            }).get().sort(function(a, b) { return a - b; });
+            
+            var isConsecutive = true;
+            for (var i = 0; i < periodNumbers.length - 1; i++) {
+                if (periodNumbers[i + 1] !== periodNumbers[i] + 1) {
+                    isConsecutive = false;
+                    break;
+                }
+            }
+            
+            if (!isConsecutive) {
+                $('#periodSelectionError').text('Izberite zaporedne učne ure (npr. 1,2,3 ali 5,6 ali 8,9).').show();
+                return false;
+            }
+            
+            $('#periodSelectionError').hide();
+            return true;
+        }
+        
+        function setTimeValues() {
+            var $checkedPeriods = $('.period-checkbox:checked');
+            var selectedDate = $('#bookingDate').val();
+            
+            if ($checkedPeriods.length > 0) {
+                // Sort periods by number
+                var $sortedPeriods = $checkedPeriods.toArray().sort(function(a, b) {
+                    return parseInt($(a).val()) - parseInt($(b).val());
+                });
+                
+                // First period's start time is the booking start time
+                var startPeriod = $($sortedPeriods[0]);
+                var startTime = startPeriod.data('start');
+                
+                // Last period's end time is the booking end time
+                var endPeriod = $($sortedPeriods[$sortedPeriods.length - 1]);
+                var endTime = endPeriod.data('end');
+                
+                // Set the hidden fields with full datetime strings
+                $('#startTime').val(selectedDate + 'T' + startTime);
+                $('#endTime').val(selectedDate + 'T' + endTime);
+            }
+        }
+        
+        // Trigger server check for upcoming bookings when page loads
+        $(document).ready(function() {
+            // Initial check
+            checkForUpcomingBookings();
+            
+            // Poll for booking updates every 30 seconds as a fallback
+            setInterval(checkForUpcomingBookings, 30000);
+            
+            // Attach click handlers
+            attachBookingClickHandlers();
+            
+            // Period selection logic
+            $('.period-checkbox').on('change', function() {
+                validatePeriodSelection();
+            });
+            
+            // Form submit validation
+            $('form').on('submit', function(e) {
+                if (!validatePeriodSelection()) {
+                    e.preventDefault();
+                    return false;
+                }
+                
+                // Set the start and end times based on selected periods
+                setTimeValues();
+            });
+        });
+    </script>
+</body>
+</html>
+
+@functions {
+    public string GetBookingSectionClass(WebApplication1.Models.Booking booking)
+    {
+        if (booking == null)
+        {
+            return "booking-section-available"; // Green for available
+        }
+        
+        return booking.Status switch
+        {
+            WebApplication1.Models.BookingStatus.Reserved => "booking-section-reserved", // Yellow when reserved but not checked in
+            WebApplication1.Models.BookingStatus.CheckedIn => "booking-section-checked-in", // Red when checked in
+            _ => "booking-section-available" // Default to green
+        };
+    }
+} 

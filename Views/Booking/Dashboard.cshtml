@@ -1,0 +1,241 @@
+@model IEnumerable<WebApplication1.Models.Booking>
+@{
+    ViewData["Title"] = "Nadzorna plošča rezervacij";
+}
+
+<div class="container mt-4">
+    <div class="row mb-4">
+        <div class="col-12 d-flex justify-content-between align-items-center">
+            <div>
+                <h1 class="display-4">Nadzorna plošča rezervacij</h1>
+            </div>
+            <div>
+                <button id="refreshButton" class="btn btn-outline-primary">
+                    <i class="bi bi-arrow-clockwise"></i> Osveži podatke
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div class="row mb-3">
+        <div class="col-md-12">
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <h3 class="mb-0">Evidenca rezervacij</h3>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-striped" id="bookingsTable">
+                            <thead>
+                                <tr>
+                                    <th>Dijak</th>
+                                    <th>Razlog</th>
+                                    <th>Datum</th>
+                                    <th>Čas</th>
+                                    <th>Učne Ure</th>
+                                    <th>Trajanje</th>
+                                    <th>Status</th>
+                                    <th>Prijava</th>
+                                    <th>Odjava</th>
+                                    <th>Ustvarjeno</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var booking in Model)
+                                {
+                                    string periods = GetBookingPeriods(booking);
+                                    <tr class="@GetRowColorClass(booking)" style="cursor: pointer;" data-booking-id="@booking.Id" data-student-name="@booking.StudentName" data-reason="@booking.Reason" data-start-time="@booking.StartTime.ToString("g")" data-end-time="@booking.EndTime.ToString("g")" data-status="@GetStatusText(booking.Status)" data-duration="@((booking.EndTime - booking.StartTime).TotalMinutes)" data-created-at="@booking.CreatedAt.ToString("g")" data-checkin="@(booking.CheckInTime.HasValue ? booking.CheckInTime.Value.ToString("g") : "N/A")" data-checkout="@(booking.CheckOutTime.HasValue ? booking.CheckOutTime.Value.ToString("g") : "N/A")">
+                                        <td>@booking.StudentName</td>
+                                        <td>@booking.Reason</td>
+                                        <td>@booking.StartTime.ToString("d. M. yyyy")</td>
+                                        <td>@booking.StartTime.ToString("HH:mm") - @booking.EndTime.ToString("HH:mm")</td>
+                                        <td>@periods</td>
+                                        <td>@((booking.EndTime - booking.StartTime).TotalMinutes) min</td>
+                                        <td>@GetStatusText(booking.Status)</td>
+                                        <td>@(booking.CheckInTime.HasValue ? booking.CheckInTime.Value.ToString("d. M. yyyy HH:mm") : "N/A")</td>
+                                        <td>@(booking.CheckOutTime.HasValue ? booking.CheckOutTime.Value.ToString("d. M. yyyy HH:mm") : "N/A")</td>
+                                        <td>@booking.CreatedAt.ToString("d. M. yyyy HH:mm")</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        $(document).ready(function () {
+            // Initialize DataTable with more options
+            var table = $('#bookingsTable').DataTable({
+                order: [[7, 'desc']], // Sort by creation date by default
+                pageLength: 25, // Show more entries by default
+                responsive: true,
+                language: {
+                    search: "Filtriraj zapise:",
+                    zeroRecords: "Ni najdenih rezervacij",
+                    paginate: {
+                        first: "Prva",
+                        last: "Zadnja",
+                        next: "Naprej",
+                        previous: "Nazaj"
+                    },
+                    info: "Prikazano _START_ do _END_ od skupno _TOTAL_ zapisov",
+                    infoEmpty: "Ni zapisov za prikaz",
+                    infoFiltered: "(filtrirano od skupno _MAX_ zapisov)",
+                    lengthMenu: "Prikaži _MENU_ zapisov"
+                }
+            });
+            
+            // Refresh button functionality
+            $('#refreshButton').click(function() {
+                window.location.reload();
+            });
+            
+            // Auto-refresh every 2 minutes
+            setInterval(function() {
+                window.location.reload();
+            }, 120000);
+            
+            // Add click handler for table rows
+            $('#bookingsTable tbody').on('click', 'tr', function() {
+                var data = $(this).data();
+                var now = new Date();
+                var startTime = new Date(data.startTime);
+                var endTime = new Date(data.endTime);
+                
+                // Check if booking is happening now (started but not ended)
+                var isHappening = startTime <= now && endTime > now;
+                
+                // Get day of week in Slovene
+                var daysOfWeek = ['nedelja', 'ponedeljek', 'torek', 'sreda', 'četrtek', 'petek', 'sobota'];
+                var dayOfWeek = daysOfWeek[startTime.getDay()];
+                
+                // Define school periods
+                var periods = [
+                    { number: 1, start: '07:10', end: '07:55' },
+                    { number: 2, start: '08:00', end: '08:45' },
+                    { number: 3, start: '08:50', end: '09:35' },
+                    { number: 4, start: '09:40', end: '10:25' },
+                    { number: 5, start: '10:30', end: '11:15' },
+                    { number: 6, start: '11:20', end: '12:05' },
+                    { number: 7, start: '12:10', end: '12:55' },
+                    { number: 8, start: '13:00', end: '13:45' },
+                    { number: 9, start: '13:50', end: '14:35' }
+                ];
+                
+                // Convert start and end times to minutes since midnight for comparison
+                function timeToMinutes(timeStr) {
+                    var parts = timeStr.split(':');
+                    return parseInt(parts[0]) * 60 + parseInt(parts[1]);
+                }
+                
+                function dateToMinutes(date) {
+                    return date.getHours() * 60 + date.getMinutes();
+                }
+                
+                var startMinutes = dateToMinutes(startTime);
+                var endMinutes = dateToMinutes(endTime);
+                
+                // Find missed periods
+                var missedPeriods = [];
+                periods.forEach(function(period) {
+                    var periodStartMinutes = timeToMinutes(period.start);
+                    var periodEndMinutes = timeToMinutes(period.end);
+                    
+                    // Check if period overlaps with booking time
+                    if ((startMinutes <= periodEndMinutes && endMinutes >= periodStartMinutes) ||
+                        (startMinutes >= periodStartMinutes && startMinutes < periodEndMinutes) ||
+                        (endMinutes > periodStartMinutes && endMinutes <= periodEndMinutes)) {
+                        missedPeriods.push(period.number);
+                    }
+                });
+                
+                // Format missed periods list
+                var missedPeriodsText = '';
+                if (missedPeriods.length > 0) {
+                    missedPeriodsText = " (manjkal ure: " + missedPeriods.join(", ") + ")";
+                }
+                
+                // Prepare email content
+                var subject = "Informacije o prisotnosti: " + data.studentName;
+                var body = data.studentName + " je dne " + dayOfWeek + " manjkal od " + 
+                           startTime.getHours().toString().padStart(2, '0') + ":" + 
+                           startTime.getMinutes().toString().padStart(2, '0') + " do " + 
+                           endTime.getHours().toString().padStart(2, '0') + ":" + 
+                           endTime.getMinutes().toString().padStart(2, '0') + 
+                           missedPeriodsText + " zaradi: " + data.reason + ".\n";
+             
+                
+                // Encode the content for mailto link
+                var mailtoLink = "mailto:?subject=" + encodeURIComponent(subject) + "&body=" + encodeURIComponent(body);
+                
+                // Open the mail client
+                window.location.href = mailtoLink;
+            });
+        });
+    </script>
+}
+
+@functions {
+    public string GetRowColorClass(WebApplication1.Models.Booking booking)
+    {
+        return booking.Status switch
+        {
+            WebApplication1.Models.BookingStatus.CheckedIn => "table-success",
+            WebApplication1.Models.BookingStatus.CheckedOut => "table-info",
+            WebApplication1.Models.BookingStatus.Cancelled => "table-danger",
+            _ => ""
+        };
+    }
+    
+    public string GetStatusText(WebApplication1.Models.BookingStatus status)
+    {
+        return status switch
+        {
+            WebApplication1.Models.BookingStatus.Reserved => "Rezervirano",
+            WebApplication1.Models.BookingStatus.CheckedIn => "Prijavljeno",
+            WebApplication1.Models.BookingStatus.CheckedOut => "Odjavljeno",
+            WebApplication1.Models.BookingStatus.Cancelled => "Preklicano",
+            _ => status.ToString()
+        };
+    }
+    
+    public string GetBookingPeriods(WebApplication1.Models.Booking booking)
+    {
+        // Define the school periods
+        var periods = new List<(int Number, TimeSpan Start, TimeSpan End)>
+        {
+            (1, new TimeSpan(7, 10, 0), new TimeSpan(7, 55, 0)),
+            (2, new TimeSpan(8, 0, 0), new TimeSpan(8, 45, 0)),
+            (3, new TimeSpan(8, 50, 0), new TimeSpan(9, 35, 0)),
+            (4, new TimeSpan(9, 40, 0), new TimeSpan(10, 25, 0)),
+            (5, new TimeSpan(10, 30, 0), new TimeSpan(11, 15, 0)),
+            (6, new TimeSpan(11, 20, 0), new TimeSpan(12, 5, 0)),
+            (7, new TimeSpan(12, 10, 0), new TimeSpan(12, 55, 0)),
+            (8, new TimeSpan(13, 0, 0), new TimeSpan(13, 45, 0)),
+            (9, new TimeSpan(13, 50, 0), new TimeSpan(14, 35, 0))
+        };
+        
+        var startTime = booking.StartTime.TimeOfDay;
+        var endTime = booking.EndTime.TimeOfDay;
+        
+        var matchedPeriods = new List<int>();
+        
+        foreach (var period in periods)
+        {
+            // Check if period overlaps with booking time
+            if ((startTime <= period.End && endTime >= period.Start) ||
+                (startTime >= period.Start && startTime < period.End) ||
+                (endTime > period.Start && endTime <= period.End))
+            {
+                matchedPeriods.Add(period.Number);
+            }
+        }
+        
+        return matchedPeriods.Count > 0 ? string.Join(", ", matchedPeriods) : "-";
+    }
+} 
