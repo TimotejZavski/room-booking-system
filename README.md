@@ -30,7 +30,7 @@ A comprehensive ASP.NET Core MVC application for managing room bookings and stud
 
 1. Clone the repository
 ```
-git clone https://github.com/yourusername/room-booking-system.git
+git clone https://github.com/TimotejZavski/room-booking-system.git
 ```
 
 2. Navigate to the project directory
